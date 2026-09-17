@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chrome T-Rex Runner Game</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #0f172a; color: #f8fafc; font-family: 'Segoe UI', system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .game-container { background: #1e293b; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 2rem; width: 100%; max-width: 680px; box-shadow: 0 25px 50px rgba(0,0,0,0.6); text-align: center; }
+    .score-board { display: flex; justify-content: space-between; font-size: 1.25rem; font-weight: bold; font-family: monospace; color: #38bdf8; background: #090d16; border: 1px solid #334155; border-radius: 12px; padding: 0.75rem 1.5rem; margin-bottom: 1rem; }
+    canvas { background: #090d16; border: 2px solid #334155; border-radius: 16px; width: 100%; height: auto; max-height: 240px; cursor: pointer; display: block; }
+    .btn-jump { background: linear-gradient(135deg, #6366f1, #10b981); color: #fff; font-size: 1.1rem; font-weight: bold; border-radius: 12px; border: none; padding: 0.75rem 2rem; margin-top: 1rem; width: 100%; transition: transform 0.1s; }
+    .btn-jump:active { transform: scale(0.98); }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <h2 class="h4 mb-3 text-indigo-400 font-bold">🦖 Chrome T-Rex Runner Game</h2>
+    
+    <div class="score-board">
+      <span id="score-text">SCORE: 0</span>
+      <span id="highscore-text" class="text-emerald-400">HI SCORE: 0</span>
+    </div>
+
+    <canvas id="gameCanvas" width="600" height="200" onclick="jump()"></canvas>
+
+    <div class="mt-3 text-slate-400 text-xs font-mono">Press SPACEBAR or CLICK Canvas to Jump over Cacti!</div>
+    <button class="btn btn-jump" onclick="jump()">🚀 JUMP / RESTART GAME</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let score = 0;
+    let highScore = localStorage.getItem('dino_highscore') || 0;
+    document.getElementById('highscore-text').textContent = 'HI SCORE: ' + highScore;
+
+    let isGameOver = false;
+    let animationId = null;
+    let frameCount = 0;
+
+    // Dino Object
+    const dino = {
+      x: 40,
+      y: 140,
+      width: 24,
+      height: 36,
+      velocityY: 0,
+      gravity: 0.8,
+      jumping: false
+    };
+
+    // Obstacles Array
+    let obstacles = [];
+
+    function spawnObstacle() {
+      obstacles.push({
+        x: canvas.width,
+        y: 146,
+        width: 18,
+        height: 30,
+        speed: 5 + Math.floor(score / 100)
+      });
+    }
+
+    function jump() {
+      if (isGameOver) {
+        restartGame();
+        return;
+      }
+      if (!dino.jumping) {
+        dino.velocityY = -13;
+        dino.jumping = true;
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'ArrowUp') {
+        e.preventDefault();
+        jump();
+      }
+    });
+
+    function restartGame() {
+      score = 0;
+      dino.y = 140;
+      dino.velocityY = 0;
+      dino.jumping = false;
+      obstacles = [];
+      isGameOver = false;
+      document.getElementById('score-text').textContent = 'SCORE: 0';
+      loop();
+    }
+
+    function update() {
+      if (isGameOver) return;
+
+      frameCount++;
+      score++;
+      document.getElementById('score-text').textContent = 'SCORE: ' + score;
+
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('dino_highscore', highScore);
+        document.getElementById('highscore-text').textContent = 'HI SCORE: ' + highScore;
+      }
+
+      // Physics
+      dino.velocityY += dino.gravity;
+      dino.y += dino.velocityY;
+
+      if (dino.y >= 140) {
+        dino.y = 140;
+        dino.velocityY = 0;
+        dino.jumping = false;
+      }
+
+      // Spawn Obstacles
+      if (frameCount % 90 === 0) {
+        spawnObstacle();
+      }
+
+      // Move Obstacles & Collision Check
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        obs.x -= obs.speed;
+
+        // AABB Collision
+        if (
+          dino.x < obs.x + obs.width &&
+          dino.x + dino.width > obs.x &&
+          dino.y < obs.y + obs.height &&
+          dino.y + dino.height > obs.y
+        ) {
+          isGameOver = true;
+        }
+
+        if (obs.x + obs.width < 0) {
+          obstacles.splice(i, 1);
+        }
+      }
+    }
+
+    function draw() {
+      // Clear
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Ground Line
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, 176);
+      ctx.lineTo(canvas.width, 176);
+      ctx.stroke();
+
+      // Draw Dino (Green T-Rex box with eye)
+      ctx.fillStyle = '#34d399';
+      ctx.fillRect(dino.x, dino.y, dino.width, dino.height);
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(dino.x + 16, dino.y + 6, 4, 4); // Eye
+
+      // Draw Obstacles (Red Cacti)
+      ctx.fillStyle = '#f43f5e';
+      for (const obs of obstacles) {
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+      }
+
+      // Game Over Screen
+      if (isGameOver) {
+        ctx.fillStyle = 'rgba(9, 13, 22, 0.85)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#f43f5e';
+        ctx.font = 'bold 24px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', canvas.width / 2, 90);
+
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = '14px monospace';
+        ctx.fillText('Click or Press Space to Play Again', canvas.width / 2, 130);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      if (!isGameOver) {
+        animationId = requestAnimationFrame(loop);
+      }
+    }
+
+    loop();
+  </script>
+</body>
+</html>
